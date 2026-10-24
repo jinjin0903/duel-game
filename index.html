@@ -42,7 +42,6 @@ body.tense #game{box-shadow:inset 0 0 calc(30px + var(--t)*22px) rgba(255,0,40,c
 <h1>DUEL</h1><div class="sm">동시 심리전 · 체력 1 · 한 발이면 끝</div>
 <button class="big" id="bLocal">👥 1대1 로컬 대전</button>
 <button class="big" id="bRobot">🤖 로봇 대전</button><button class="big" id="bOnline">🌐 온라인 대전</button><div class="row" id="olp" style="display:none"><button id="bCreate">방 만들기</button><input id="rc" maxlength="5" placeholder="방 코드" style="flex:1;min-width:0;text-transform:uppercase;text-align:center;font-size:18px;border-radius:12px;border:2px solid #2c3546;background:#181e29;color:#e8ecf3"><button id="bJoin">참가</button></div><button id="bRejoin" style="display:none">↩ 마지막 방 재접속</button>
- <button class="big" id="bOnline">🌐 온라인 대전</button>
 <button class="big" id="bLadder">🏆 래더 매칭</button>
 <div class="sm" id="ladderStatus"></div>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
 <div class="row" id="diff" style="display:none"><button data-d="easy">쉬움</button><button data-d="normal">보통</button><button data-d="hard">어려움</button></div>
@@ -284,6 +283,115 @@ function onlineAfter(r,dbl){if(G.mode!=='online'||!G.playing)return;
 $('#bOnline').onclick=()=>{$('#olp').style.display='flex';try{const c=localStorage.getItem('duelRoom');if(c){$('#bRejoin').style.display='block';$('#bRejoin').textContent='↩ 방 '+c+' 재접속'}}catch(e){}};
 $('#bCreate').onclick=()=>onlineStart('',true);$('#bJoin').onclick=()=>onlineStart($('#rc').value,false);
 $('#bRejoin').onclick=()=>{try{onlineStart(localStorage.getItem('duelRoom'),false)}catch(e){}};
+ 
+/* ===== DUEL 래더 자동 매칭 ===== */
+let ladderTimer = null;
+let ladderBusy = false;
+
+const ladderStatus = document.querySelector('#ladderStatus');
+const ladderButton = document.querySelector('#bLadder');
+
+function stopLadderSearch() {
+  if (ladderTimer !== null) {
+    clearInterval(ladderTimer);
+    ladderTimer = null;
+  }
+
+  ladderBusy = false;
+
+  if (ladderButton) {
+    ladderButton.disabled = false;
+    ladderButton.textContent = '🏆 래더 매칭';
+  }
+}
+
+async function findLadderMatch() {
+  if (!sb || !ladderBusy) return;
+
+  try {
+    const { data, error } = await sb.rpc('duel_find_match');
+
+    if (!ladderBusy) return;
+    if (error) throw error;
+
+    if (data) {
+      // 매칭 성공: 반복 검색을 멈추고 기존 온라인 게임에 입장
+      stopLadderSearch();
+      ladderStatus.textContent = '상대를 찾았습니다! 대결에 입장합니다.';
+      enterOnline(data);
+    } else {
+      ladderStatus.textContent =
+        '상대를 찾는 중... 상대가 참가하면 자동으로 연결됩니다.';
+    }
+  } catch (error) {
+    stopLadderSearch();
+    ladderStatus.textContent =
+      '매칭 오류: ' + (error.message || String(error));
+  }
+}
+
+async function startLadderSearch() {
+  if (ladderBusy) {
+    // 매칭 취소
+    stopLadderSearch();
+
+    if (sb) {
+      const { error } = await sb.rpc('duel_cancel_match');
+      if (error) {
+        ladderStatus.textContent =
+          '취소 처리 오류: ' + error.message;
+        return;
+      }
+    }
+
+    ladderStatus.textContent = '매칭을 취소했습니다.';
+    return;
+  }
+
+  if (!SB_URL || !SB_KEY || !window.supabase) {
+    alert('config.js의 SB_URL과 SB_KEY 설정을 확인해 주세요.');
+    return;
+  }
+
+  ladderButton.disabled = true;
+  ladderButton.textContent = '연결 중...';
+
+  try {
+    if (!sb) {
+      sb = supabase.createClient(SB_URL, SB_KEY);
+    }
+
+    const { data: { session }, error } =
+      await sb.auth.getSession();
+
+    if (error) throw error;
+
+    if (!session) {
+      const auth = await sb.auth.signInAnonymously();
+      if (auth.error) throw auth.error;
+    }
+
+    ladderBusy = true;
+    ladderButton.disabled = false;
+    ladderButton.textContent = '✕ 매칭 취소';
+    ladderStatus.textContent = '매칭 서버에 연결했습니다.';
+
+    await findLadderMatch();
+
+    if (ladderBusy && ladderTimer === null) {
+      ladderTimer = setInterval(findLadderMatch, 2000);
+    }
+  } catch (error) {
+    stopLadderSearch();
+    ladderStatus.textContent =
+      '연결 오류: ' + (error.message || String(error));
+  }
+}
+
+if (ladderButton) {
+  ladderButton.addEventListener('click', startLadderSearch);
+}
+
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&G.mode==='online')syncState()});
 /* ===== 설정/메뉴 ===== */
 function tg(){document.querySelectorAll('.tgl[data-k]').forEach(b=>b.classList.toggle('off',!cfg[b.dataset.k]))}
