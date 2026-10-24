@@ -318,6 +318,7 @@ async function findLadderMatch() {
       // 매칭 성공: 반복 검색을 멈추고 기존 온라인 게임에 입장
       stopLadderSearch();
       ladderStatus.textContent = '상대를 찾았습니다! 대결에 입장합니다.';
+     window.isLadderMatch = true;
       enterOnline(data);
     } else {
       ladderStatus.textContent =
