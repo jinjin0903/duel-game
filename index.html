@@ -123,10 +123,68 @@ function showOv(h){const o=$('#ov');o.innerHTML=h;o.style.display='flex'}
 function rematch(why){G.phase='draw';if(G.rc>=4)return coinToss();G.rc++;setTension();Aud.refresh();
 showOv(`<div class="t">무승부 — 재대결</div><div>${why}</div><div class="sm">재대결 ${G.rc}/4회차 · 턴마다 ${(0.2*(G.rc+1)).toFixed(1)}초씩 감소<br>상대의 장전·방어는 보이지 않습니다</div>`);
 later(()=>{$('#ov').style.display='none';resetRound();startTurn()},2700)}
-function finish(w,coin){G.phase='end';const n=G.rc;G.playing=false;G.rc=0;G.peek=[0,0];Aud.refresh();document.body.classList.remove('tense');
-later(()=>{const t=G.mode==='local'?`P${w+1} 승리`:w===0?'승리':'패배';Aud.play(G.mode==='local'||w===0?'win':'lose');
-showOv(`<div class="t" style="color:${COL[w]}">${t}</div><div class="sm">${coin?'동전 던지기로 승부가 결정됐습니다':n?`재대결 ${n}회 끝에 승부가 났습니다`:'한 발로 승부가 났습니다'}</div><button class="big" id="bAgain">다시 하기</button><button class="big" id="bBack">메인 메뉴</button>`);
-const m=G.mode,d=G.diff;$('#bAgain').onclick=()=>m==='online'?toMenu():newGame(m,d);$('#bBack').onclick=toMenu},900)}
+function finish(w,coin){
+  G.phase='end';
+  const n=G.rc;
+  G.playing=false;
+  G.rc=0;
+  G.peek=[0,0];
+  Aud.refresh();
+  document.body.classList.remove('tense');
+
+  if (window.isLadderMatch) {
+    later(() => {
+      showLadderResult(w, coin, n);
+    }, 900);
+    return;
+  }
+
+  later(() => {
+    const t = G.mode==='local' ? `P${w+1} 승리` : w===0 ? '승리' : '패배';
+    Aud.play(G.mode==='local'||w===0?'win':'lose');
+    showOv(`<div class="t" style="color:${COL[w]}">${t}</div><div class="sm">${coin?'동전 던지기로 승부가 결정됐습니다':n?`재대결 ${n}회 끝에 승부가 났습니다`:'한 발로 승부가 났습니다'}</div><button class="big" id="bAgain">다시 하기</button><button class="big" id="bBack">메인 메뉴</button>`);
+    const m=G.mode,d=G.diff;
+    $('#bAgain').onclick=()=>m==='online'?toMenu():newGame(m,d);
+    $('#bBack').onclick=toMenu;
+  },900);
+}
+ function ladderTier(rating) {
+  if (rating >= 2000) return '마스터';
+  if (rating >= 1800) return '다이아';
+  if (rating >= 1600) return '플래티넘';
+  if (rating >= 1400) return '골드';
+  if (rating >= 1200) return '실버';
+  return '브론즈';
+}
+
+async function showLadderResult(w, coin, n) {
+  const { data, error } = await sb.rpc('duel_my_ladder_profile');
+
+  if (error || !data || !data.length) {
+    alert('사다리 점수를 불러오지 못했습니다.');
+    toMenu();
+    return;
+  }
+
+  const rating = data[0].rating;
+  const wins = data[0].wins;
+  const losses = data[0].losses;
+
+  showOv(`
+    <div class="t" style="color:${COL[w]}">
+      ${w === 0 ? '승리!' : '패배'}
+    </div>
+    <div class="sm">현재 티어: ${ladderTier(rating)}</div>
+    <div class="sm">현재 점수: ${rating}점</div>
+    <div class="sm">전적: ${wins}승 ${losses}패</div>
+    <button class="big" id="bLadderBack">메인 메뉴</button>
+  `);
+
+  $('#bLadderBack').onclick = () => {
+    window.isLadderMatch = false;
+    toMenu();
+  };
+}
 function toMenu(){clearAll();$('#game').style.display='none';$('#menu').style.display='flex'}
 function ui(){const rm=G.rc>0;$('#turnT').textContent=`턴 ${G.turn}/${MAXT}`;$('#remT').textContent=`재대결 ${G.rc}`;
 for(let i=0;i<2;i++){const P=G.pl[i],el=$('#p'+(i+1)),hide=rm&&(G.mode==='local'?!G.peek[i]:i===1),vs=valid(i),loc=G.mode==='local'&&rm,n=el.querySelector('.nm');
@@ -362,15 +420,18 @@ async function startLadderSearch() {
       sb = supabase.createClient(SB_URL, SB_KEY);
     }
 
-    const { data: { session }, error } =
-      await sb.auth.getSession();
+    const { data, error } = await sb.auth.getSession();
+if (error) throw error;
 
-    if (error) throw error;
+let session = data.session;
 
-    if (!session) {
-      const auth = await sb.auth.signInAnonymously();
-      if (auth.error) throw auth.error;
-    }
+if (!session) {
+  const auth = await sb.auth.signInAnonymously();
+  if (auth.error) throw auth.error;
+  session = auth.data.session;
+}
+
+myId = session.user.id;
 
     ladderBusy = true;
     ladderButton.disabled = false;
