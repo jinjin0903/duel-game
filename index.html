@@ -156,27 +156,46 @@ function finish(w,coin){
   if (rating >= 1200) return '실버';
   return '브론즈';
 }
-
 async function showLadderResult(w, coin, n) {
-  const { data, error } = await sb.rpc('duel_my_ladder_profile');
+  const [profileRes, resultRes] = await Promise.all([
+    sb.rpc('duel_my_ladder_profile'),
+    sb.rpc('duel_my_latest_ladder_result')
+  ]);
 
-  if (error || !data || !data.length) {
-    alert('사다리 점수를 불러오지 못했습니다.');
+  if (
+    profileRes.error ||
+    !profileRes.data ||
+    !profileRes.data.length ||
+    resultRes.error ||
+    !resultRes.data ||
+    !resultRes.data.length
+  ) {
+    alert('사다리 경기 결과를 불러오지 못했습니다.');
     toMenu();
     return;
   }
 
-  const rating = data[0].rating;
-  const wins = data[0].wins;
-  const losses = data[0].losses;
+  const profile = profileRes.data[0];
+  const result = resultRes.data[0];
+
+  const before = Number(result.rating_before);
+  const after = Number(result.rating_after);
+  const change = Number(result.points_change);
+
+  const won = result.is_winner;
+  const changeText = change > 0 ? `+${change}` : `${change}`;
+
+  Aud.play(won ? 'win' : 'lose');
 
   showOv(`
     <div class="t" style="color:${COL[w]}">
-      ${w === 0 ? '승리!' : '패배'}
+      ${won ? '승리!' : '패배'}
     </div>
-    <div class="sm">현재 티어: ${ladderTier(rating)}</div>
-    <div class="sm">현재 점수: ${rating}점</div>
-    <div class="sm">전적: ${wins}승 ${losses}패</div>
+    <div class="sm">경기 전 점수: ${before}점</div>
+    <div class="sm">이번 경기 점수 변동: ${changeText}점</div>
+    <div class="sm">최종 점수: ${after}점</div>
+    <div class="sm">최종 티어: ${ladderTier(after)}</div>
+    <div class="sm">전적: ${profile.wins}승 ${profile.losses}패</div>
     <button class="big" id="bLadderBack">메인 메뉴</button>
   `);
 
