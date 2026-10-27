@@ -581,18 +581,22 @@ document.querySelectorAll('#diff button').forEach(b=>b.onclick=()=>newGame('robo
 document.addEventListener('visibilitychange',()=>{if(document.hidden)Aud.stopM();else Aud.refresh()});
 tg();
 loadMyLadderStats();
-$('#bRanking').onclick = () => {
-  $('#menu').style.display = 'none';
-  $('#rankingScreen').style.display = 'block';
-  loadLadderRanking();
-};
+document.addEventListener('DOMContentLoaded', () => {
+  $('#bRanking').onclick = () => {
+    $('#menu').style.display = 'none';
+    $('#rankingScreen').style.display = 'block';
+    loadLadderRanking();
+  };
 
-$('#bRankingRefresh').onclick = loadLadderRanking;
+  $('#bRankingRefresh').onclick = () => {
+    loadLadderRanking();
+  };
 
-$('#bRankingBack').onclick = () => {
-  $('#rankingScreen').style.display = 'none';
-  toMenu();
-};
+  $('#bRankingBack').onclick = () => {
+    $('#rankingScreen').style.display = 'none';
+    toMenu();
+  };
+});
 </script>
 <div id="rankingScreen" style="display:none; position:fixed; inset:0; z-index:9999; background:#111; color:white; padding:20px; overflow-y:auto; text-align:center;">
   <h2>🏆 DUEL 순위표</h2>
