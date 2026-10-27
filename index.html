@@ -39,6 +39,22 @@ body.tense #game{box-shadow:inset 0 0 calc(30px + var(--t)*22px) rgba(255,0,40,c
 @keyframes beat{50%{filter:brightness(.82)}}
 </style><script src="config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script></head><body>
 <div id="menu">
+  <div id="myLadderStats" style="
+  text-align:center;
+  padding:14px;
+  margin:12px auto;
+  border:1px solid #777;
+  border-radius:12px;
+  width:85%;
+  max-width:320px;
+">
+  <div style="font-size:18px;font-weight:bold;">
+    내 사다리 정보
+  </div>
+  <div id="myLadderTier">티어: 불러오는 중...</div>
+  <div id="myLadderRating">점수: -</div>
+  <div id="myLadderWinrate">승률: -</div>
+</div>
 <h1>DUEL</h1><div class="sm">동시 심리전 · 체력 1 · 한 발이면 끝</div>
 <button class="big" id="bLocal">👥 1대1 로컬 대전</button>
 <button class="big" id="bRobot">🤖 로봇 대전</button><button class="big" id="bOnline">🌐 온라인 대전</button><div class="row" id="olp" style="display:none"><button id="bCreate">방 만들기</button><input id="rc" maxlength="5" placeholder="방 코드" style="flex:1;min-width:0;text-transform:uppercase;text-align:center;font-size:18px;border-radius:12px;border:2px solid #2c3546;background:#181e29;color:#e8ecf3"><button id="bJoin">참가</button></div><button id="bRejoin" style="display:none">↩ 마지막 방 재접속</button>
@@ -204,7 +220,47 @@ async function showLadderResult(w, coin, n) {
     toMenu();
   };
 }
-function toMenu(){clearAll();$('#game').style.display='none';$('#menu').style.display='flex'}
+async function loadMyLadderStats() {
+  const tierEl = $('#myLadderTier');
+  const ratingEl = $('#myLadderRating');
+  const winrateEl = $('#myLadderWinrate');
+
+  if (!tierEl || !ratingEl || !winrateEl) return;
+
+  try {
+    const { data, error } = await sb.rpc('duel_my_ladder_profile');
+
+    if (error) throw error;
+
+    if (!data || !data.length) {
+      tierEl.textContent = '티어: 브론즈';
+      ratingEl.textContent = '점수: 1000점';
+      winrateEl.textContent = '승률: 0%';
+      return;
+    }
+
+    const p = data[0];
+    const total = p.wins + p.losses;
+    const winrate = total > 0
+      ? (p.wins / total * 100).toFixed(1)
+      : '0';
+
+    tierEl.textContent = '티어: ' + ladderTier(p.rating);
+    ratingEl.textContent = '점수: ' + p.rating + '점';
+    winrateEl.textContent = '승률: ' + winrate + '%';
+  } catch (e) {
+    tierEl.textContent = '티어: 조회 실패';
+    ratingEl.textContent = '점수: -';
+    winrateEl.textContent = '승률: -';
+    console.error(e);
+  }
+}
+function toMenu(){
+  clearAll();
+  $('#game').style.display='none';
+  $('#menu').style.display='flex';
+  loadMyLadderStats();
+}
 function ui(){const rm=G.rc>0;$('#turnT').textContent=`턴 ${G.turn}/${MAXT}`;$('#remT').textContent=`재대결 ${G.rc}`;
 for(let i=0;i<2;i++){const P=G.pl[i],el=$('#p'+(i+1)),hide=rm&&(G.mode==='local'?!G.peek[i]:i===1),vs=valid(i),loc=G.mode==='local'&&rm,n=el.querySelector('.nm');
 n.textContent=nameOf(i);n.style.color=COL[i];el.querySelector('.hp').textContent=P.hp>0?'♥':'✖';
@@ -481,4 +537,5 @@ $('#bMenu').onclick=toMenu;$('#bLocal').onclick=()=>newGame('local');$('#bRobot'
 document.querySelectorAll('#diff button').forEach(b=>b.onclick=()=>newGame('robot',b.dataset.d));
 document.addEventListener('visibilitychange',()=>{if(document.hidden)Aud.stopM();else Aud.refresh()});
 tg();
+loadMyLadderStats();
 </script></body></html>
